@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 
 # ----- CONFIGURATION -----
 OPENAI_API_KEY = 'your-openai-api-key-here'
-MODEL = 'gpt-4-turbo'
+MODEL = 'gpt-4o'
 MAX_TOKENS_PER_CHUNK = 2000
 SUMMARY_MAX_TOKENS = 800
 
@@ -55,7 +55,7 @@ def summarize_chunk_safe(chunk, retry_count=3):
                 temperature=0.2,
                 max_tokens=1500
             )
-            return response['choices'][0]['message']['content']
+            return response.chocies[0].message.content
         except Exception as e:
             print(f"Error summarizing chunk (attempt {attempt+1}): {e}")
             time.sleep(2)
