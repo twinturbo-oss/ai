@@ -37,6 +37,7 @@ client = OpenAI(
     http_client=http_client
 )
 
+
 # Constants
 MODEL = "03-mini"
 MAX_TOKENS_PER_CHUNK = 2000
@@ -113,7 +114,14 @@ class FRDState(TypedDict):
     new_frd: str
     frd_pattern: str
 
-# Initialize session state variables
+# Streamlit UI Setup
+st.set_page_config(page_title="GETTS", layout="wide")
+st.sidebar.title("GETTS")
+st.sidebar.markdown("---")
+selected_topic = st.sidebar.radio("Select Functionality", ["Generate FRD", "Generate Test Scenario", "Generate Mockup", "Generate Excel File"], index=0)
+st.title("GETTS")
+
+# Initialize all session state variables
 if 'frd_generated' not in st.session_state:
     st.session_state.frd_generated = False
 if 'previous_brd' not in st.session_state:
@@ -129,12 +137,6 @@ if 'new_frd_text' not in st.session_state:
 if 'user_notes' not in st.session_state:
     st.session_state.user_notes = ""
 
-# Streamlit UI Setup
-st.set_page_config(page_title="GETTS", layout="wide")
-st.sidebar.title("GETTS")
-st.sidebar.markdown("---")
-selected_topic = st.sidebar.radio("Select Functionality", ["Generate FRD", "Generate Test Scenario", "Generate Mockup", "Generate Excel File"], index=0)
-st.title("GETTS")
 if selected_topic == "Generate FRD":
     st.header("FRD Generator")
     st.markdown("BRD and FRD is pre-loaded")
@@ -143,24 +145,21 @@ if selected_topic == "Generate FRD":
     existing_brd_file = docs_path / "Bunching_Orders_Rewriting_BRD(in progress).docx"
     existing_frd_file = docs_path / "BO Functional Requirements Document_signOffVersion.docx"
 
-    new_brd_file = st.file_uploader("Upload New BRD (.docx)", type="docx")
+    new_brd_file = st.file_uploader("Upload New BRD (.docx)", type="docx", key="brd_uploader")
     current_brd = new_brd_file.name if new_brd_file else None
 
     if st.session_state.previous_brd != current_brd:
         st.session_state.frd_generated = False
         st.session_state.previous_brd = current_brd
 
-    if st.button("Generate New FRD", type="primary"):
+    if st.button("Generate New FRD", type="primary", key="generate_frd"):
         try:
             with st.spinner("Summarizing documents..."):
                 st.session_state.reference_brd_full = "\n\n".join(read_docx(existing_brd_file))
                 st.session_state.reference_frd_full = "\n\n".join(read_docx(existing_frd_file))
                 st.session_state.new_brd_full = "\n\n".join(read_docx(new_brd_file)) if new_brd_file else ""
 
-            with st.spinner("Generating new FRD..."):
-                # Include empty user notes in initial generation
-                initial_notes = st.session_state.get('user_notes', '')
-                
+            with st.spinner("Generating new FRD (this may take a minute)..."):
                 final_graph = build_frd_graph(
                     SECTIONS,
                     reference_brd_full=st.session_state.reference_brd_full,
@@ -172,90 +171,85 @@ if selected_topic == "Generate FRD":
                 result = final_graph.invoke({
                     "brd": st.session_state.new_brd_full,
                     "section": "",
-                    "analysis": initial_notes,  # Include any existing notes
+                    "analysis": "",
                     "generated": "",
                     "frd_frd": {}
                 })
 
                 st.session_state.new_frd_text = format_frd_text(result["full_frd"])
                 st.session_state.frd_generated = True
-                st.session_state.user_notes = initial_notes  # Preserve notes
+                st.rerun()  # Force refresh to show the enhancement UI
 
-        except FileNotFoundError as e:
-            st.error(f"Missing file in docs folder: {e.filename}")
         except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
--------------------------------------------------------------------
-  if st.session_state.frd_generated:
+            st.error(f"Error generating FRD: {str(e)}")
+
+    # Show enhancement UI only after generation
+    if st.session_state.frd_generated:
+        st.success("Base FRD generated successfully!")
         st.session_state.user_notes = st.text_area(
-            "What should be added/changed in the FRD?",
+            "Enter your additional requirements or changes:",
             value=st.session_state.user_notes,
-            key="user_notes_input"
+            key="user_notes"
         )
+
+        if st.button("Enhance FRD", type="primary", key="enhance_frd"):
+            if not st.session_state.user_notes.strip():
+                st.warning("Please enter some changes before enhancing")
+            else:
+                try:
+                    with st.spinner("Incorporating your changes (this may take a minute)..."):
+                        # Create clear instructions for the LLM
+                        enhancement_prompt = f"""
+                        Please revise the existing FRD by intelligently incorporating these user-requested changes:
+                        
+                        USER REQUESTED CHANGES:
+                        {st.session_state.user_notes}
+                        
+                        GUIDELINES:
+                        1. Merge changes contextually where they belong
+                        2. Maintain all existing valid content
+                        3. Keep the professional FRD format
+                        4. Add new sections only if needed
+                        5. Return the complete revised FRD
+                        """
+                        
+                        final_graph = build_frd_graph(
+                            SECTIONS,
+                            reference_brd_full=st.session_state.reference_brd_full,
+                            reference_frd_full=st.session_state.reference_frd_full,
+                            new_brd_full=st.session_state.new_brd_full,
+                            skip_scenario_refine=True
+                        )
+
+                        result = final_graph.invoke({
+                            "brd": st.session_state.new_brd_full,
+                            "section": "",
+                            "analysis": enhancement_prompt,
+                            "generated": st.session_state.new_frd_text,
+                            "frd_frd": {}
+                        })
+
+                        st.session_state.new_frd_text = format_frd_text(result["full_frd"])
+                        st.session_state.user_notes = ""  # Clear notes after successful enhancement
+                        st.success("FRD enhanced successfully!")
+                        st.rerun()  # Refresh to show updated FRD
+
+                except Exception as e:
+                    st.error(f"Error enhancing FRD: {str(e)}")
+
+        # Display the current FRD
+        st.subheader("Current FRD Version")
+        st.text_area("FRD Content", 
+                    st.session_state.new_frd_text, 
+                    height=400,
+                    key="frd_display")
         
-        if st.button("Enhance FRD with Changes", type="primary"):
-            try:
-                with st.spinner("Intelligently incorporating your changes..."):
-                    # Create a clear instruction for the LLM
-                    modification_request = f"""
-                    Please revise the existing FRD by INCORPORATING these user-requested changes:
-                    {st.session_state.user_notes}
-                    
-                    Guidelines:
-                    1. Merge changes contextually where they belong
-                    2. Maintain all existing valid content
-                    3. Keep the same professional FRD format
-                    4. Add new sections only if needed
-                    """
-                    
-                    final_graph = build_frd_graph(
-                        SECTIONS,
-                        reference_brd_full=st.session_state.reference_brd_full,
-                        reference_frd_full=st.session_state.reference_frd_full,
-                        new_brd_full=st.session_state.new_brd_full,
-                        skip_scenario_refine=True
-                    )
-
-                    result = final_graph.invoke({
-                        "brd": st.session_state.new_brd_full,
-                        "section": "",
-                        "analysis": modification_request,  # The enhancement instructions
-                        "generated": st.session_state.new_frd_text,  # Original FRD
-                        "frd_frd": {}
-                    })
-
-                    # Format and store the enhanced FRD
-                    enhanced_frd = format_frd_text(result["full_frd"])
-                    
-                    # Add change log at the end (optional)
-                    enhanced_frd += f"\n\n--- CHANGE LOG ---\nIncorporated user requests: {st.session_state.user_notes}"
-                    
-                    st.session_state.new_frd_text = enhanced_frd
-                    st.success("FRD Enhanced Successfully!")
-
-            except Exception as e:
-                st.error(f"Error enhancing FRD: {e}")
----------------------------------------------------------
-
-        st.success("FRD Generated Successfully!")
-
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            st.download_button(
-                "Download New FRD", 
-                st.session_state.new_frd_text, 
-                file_name="new_frd.txt", 
-                mime="text/plain", 
-                type="primary"
-            )
-        with col2:
-            st.text_area(
-                "Preview of Generated FRD", 
-                st.session_state.new_frd_text, 
-                height=300, 
-                label_visibility="collapsed",
-                key="frd_preview"
-            )
+        st.download_button(
+            "Download Current FRD",
+            st.session_state.new_frd_text,
+            file_name="enhanced_frd.txt",
+            mime="text/plain"
+        )
 
 elif selected_topic == "Generate Test Scenario":
     st.header("Generate Test Scenario")
@@ -269,4 +263,4 @@ elif selected_topic == "Generate Excel File":
     st.header("Generate Excel File")
     st.info("Work in progress")
 
-st.markdown("----")
+st.markdown("---")
