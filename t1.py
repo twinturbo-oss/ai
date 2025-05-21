@@ -121,25 +121,27 @@ st.sidebar.markdown("---")
 selected_topic = st.sidebar.radio("Select Functionality", ["Generate FRD", "Generate Test Scenario", "Generate Mockup", "Generate Excel File"], index=0)
 st.title("GETTS")
 
-# Initialize all session state variables
-if 'frd_generated' not in st.session_state:
-    st.session_state.frd_generated = False
-if 'previous_brd' not in st.session_state:
-    st.session_state.previous_brd = None
-if 'reference_brd_full' not in st.session_state:
-    st.session_state.reference_brd_full = ""
-if 'reference_frd_full' not in st.session_state:
-    st.session_state.reference_frd_full = ""
-if 'new_brd_full' not in st.session_state:
-    st.session_state.new_brd_full = ""
-if 'new_frd_text' not in st.session_state:
-    st.session_state.new_frd_text = ""
-if 'user_notes' not in st.session_state:
-    st.session_state.user_notes = ""
+# ... [previous imports and setup code remains the same] ...
 
 if selected_topic == "Generate FRD":
     st.header("FRD Generator")
     st.markdown("BRD and FRD is pre-loaded")
+
+    # Initialize all session state variables
+    if 'frd_generated' not in st.session_state:
+        st.session_state.frd_generated = False
+    if 'previous_brd' not in st.session_state:
+        st.session_state.previous_brd = None
+    if 'reference_brd_full' not in st.session_state:
+        st.session_state.reference_brd_full = ""
+    if 'reference_frd_full' not in st.session_state:
+        st.session_state.reference_frd_full = ""
+    if 'new_brd_full' not in st.session_state:
+        st.session_state.new_brd_full = ""
+    if 'new_frd_text' not in st.session_state:
+        st.session_state.new_frd_text = ""
+    if 'user_notes' not in st.session_state:
+        st.session_state.user_notes = ""
 
     docs_path = Path("docs/full_data")
     existing_brd_file = docs_path / "Bunching_Orders_Rewriting_BRD(in progress).docx"
@@ -186,16 +188,20 @@ if selected_topic == "Generate FRD":
     # Show enhancement UI only after generation
     if st.session_state.frd_generated:
         st.success("Base FRD generated successfully!")
-        st.session_state.user_notes = st.text_area(
+        
+        # Get user notes through the widget without direct assignment
+        user_notes = st.text_area(
             "Enter your additional requirements or changes:",
             value=st.session_state.user_notes,
             key="user_notes"
         )
-
+        
+        # Store the user notes in session state when the enhance button is clicked
         if st.button("Enhance FRD", type="primary", key="enhance_frd"):
-            if not st.session_state.user_notes.strip():
+            if not user_notes.strip():
                 st.warning("Please enter some changes before enhancing")
             else:
+                st.session_state.user_notes = user_notes  # Store the notes before processing
                 try:
                     with st.spinner("Incorporating your changes (this may take a minute)..."):
                         # Create clear instructions for the LLM
@@ -250,6 +256,8 @@ if selected_topic == "Generate FRD":
             file_name="enhanced_frd.txt",
             mime="text/plain"
         )
+
+# ... [rest of your code remains the same] ...
 
 elif selected_topic == "Generate Test Scenario":
     st.header("Generate Test Scenario")
