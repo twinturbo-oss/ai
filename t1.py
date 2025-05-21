@@ -135,7 +135,6 @@ st.sidebar.title("GETTS")
 st.sidebar.markdown("---")
 selected_topic = st.sidebar.radio("Select Functionality", ["Generate FRD", "Generate Test Scenario", "Generate Mockup", "Generate Excel File"], index=0)
 st.title("GETTS")
-
 if selected_topic == "Generate FRD":
     st.header("FRD Generator")
     st.markdown("BRD and FRD is pre-loaded")
@@ -159,6 +158,9 @@ if selected_topic == "Generate FRD":
                 st.session_state.new_brd_full = "\n\n".join(read_docx(new_brd_file)) if new_brd_file else ""
 
             with st.spinner("Generating new FRD..."):
+                # Include empty user notes in initial generation
+                initial_notes = st.session_state.get('user_notes', '')
+                
                 final_graph = build_frd_graph(
                     SECTIONS,
                     reference_brd_full=st.session_state.reference_brd_full,
@@ -170,14 +172,14 @@ if selected_topic == "Generate FRD":
                 result = final_graph.invoke({
                     "brd": st.session_state.new_brd_full,
                     "section": "",
-                    "analysis": "",
+                    "analysis": initial_notes,  # Include any existing notes
                     "generated": "",
                     "frd_frd": {}
                 })
 
                 st.session_state.new_frd_text = format_frd_text(result["full_frd"])
                 st.session_state.frd_generated = True
-                st.session_state.user_notes = ""  # Reset user notes on new generation
+                st.session_state.user_notes = initial_notes  # Preserve notes
 
         except FileNotFoundError as e:
             st.error(f"Missing file in docs folder: {e.filename}")
@@ -194,6 +196,15 @@ if selected_topic == "Generate FRD":
         if st.button("Update FRD with Notes", type="primary"):
             try:
                 with st.spinner("Updating FRD with your notes..."):
+                    # Combine existing FRD with user notes more effectively
+                    enhanced_input = f"""
+                    USER PROVIDED NOTES:
+                    {st.session_state.user_notes}
+                    
+                    CURRENT FRD CONTENT:
+                    {st.session_state.new_frd_text}
+                    """
+                    
                     final_graph = build_frd_graph(
                         SECTIONS,
                         reference_brd_full=st.session_state.reference_brd_full,
@@ -205,13 +216,24 @@ if selected_topic == "Generate FRD":
                     result = final_graph.invoke({
                         "brd": st.session_state.new_brd_full,
                         "section": "",
-                        "analysis": st.session_state.user_notes,
+                        "analysis": enhanced_input,  # Use the combined input
                         "generated": st.session_state.new_frd_text,
                         "frd_frd": {}
                     })
 
-                    st.session_state.new_frd_text = format_frd_text(result["full_frd"])
-                    st.success("FRD Updated Successfully!")
+                    updated_frd = format_frd_text(result["full_frd"])
+                    
+                    # Ensure user notes are actually incorporated
+                    if st.session_state.user_notes.strip():
+                        updated_frd = f"""
+                        {updated_frd}
+                        
+                        --- USER ADDITIONS ---
+                        {st.session_state.user_notes}
+                        """
+                    
+                    st.session_state.new_frd_text = updated_frd
+                    st.success("FRD Updated Successfully with your notes!")
 
             except Exception as e:
                 st.error(f"Error updating FRD: {e}")
