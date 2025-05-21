@@ -185,24 +185,27 @@ if selected_topic == "Generate FRD":
             st.error(f"Missing file in docs folder: {e.filename}")
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
-
-    if st.session_state.frd_generated:
+-------------------------------------------------------------------
+  if st.session_state.frd_generated:
         st.session_state.user_notes = st.text_area(
-            "Provide Instructions to Improve the FRD", 
+            "What should be added/changed in the FRD?",
             value=st.session_state.user_notes,
             key="user_notes_input"
         )
         
-        if st.button("Update FRD with Notes", type="primary"):
+        if st.button("Enhance FRD with Changes", type="primary"):
             try:
-                with st.spinner("Updating FRD with your notes..."):
-                    # Combine existing FRD with user notes more effectively
-                    enhanced_input = f"""
-                    USER PROVIDED NOTES:
+                with st.spinner("Intelligently incorporating your changes..."):
+                    # Create a clear instruction for the LLM
+                    modification_request = f"""
+                    Please revise the existing FRD by INCORPORATING these user-requested changes:
                     {st.session_state.user_notes}
                     
-                    CURRENT FRD CONTENT:
-                    {st.session_state.new_frd_text}
+                    Guidelines:
+                    1. Merge changes contextually where they belong
+                    2. Maintain all existing valid content
+                    3. Keep the same professional FRD format
+                    4. Add new sections only if needed
                     """
                     
                     final_graph = build_frd_graph(
@@ -216,27 +219,23 @@ if selected_topic == "Generate FRD":
                     result = final_graph.invoke({
                         "brd": st.session_state.new_brd_full,
                         "section": "",
-                        "analysis": enhanced_input,  # Use the combined input
-                        "generated": st.session_state.new_frd_text,
+                        "analysis": modification_request,  # The enhancement instructions
+                        "generated": st.session_state.new_frd_text,  # Original FRD
                         "frd_frd": {}
                     })
 
-                    updated_frd = format_frd_text(result["full_frd"])
+                    # Format and store the enhanced FRD
+                    enhanced_frd = format_frd_text(result["full_frd"])
                     
-                    # Ensure user notes are actually incorporated
-                    if st.session_state.user_notes.strip():
-                        updated_frd = f"""
-                        {updated_frd}
-                        
-                        --- USER ADDITIONS ---
-                        {st.session_state.user_notes}
-                        """
+                    # Add change log at the end (optional)
+                    enhanced_frd += f"\n\n--- CHANGE LOG ---\nIncorporated user requests: {st.session_state.user_notes}"
                     
-                    st.session_state.new_frd_text = updated_frd
-                    st.success("FRD Updated Successfully with your notes!")
+                    st.session_state.new_frd_text = enhanced_frd
+                    st.success("FRD Enhanced Successfully!")
 
             except Exception as e:
-                st.error(f"Error updating FRD: {e}")
+                st.error(f"Error enhancing FRD: {e}")
+---------------------------------------------------------
 
         st.success("FRD Generated Successfully!")
 
